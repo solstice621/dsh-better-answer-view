@@ -1,4 +1,4 @@
-window.__ModuleLoader__.load({id:"better-view-for-dsh",factory(require){var module={exports:{}};var exports=module.exports;
+window.__ModuleLoader__.load({id:"dsh-better-answer-view",factory(require){var module={exports:{}};var exports=module.exports;
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -1133,7 +1133,7 @@ var webAnswerDefinition = {
 
 // src/native-slot-bridge.js
 var import_react2 = __toESM(require("react"), 1);
-var PREFIX = "better-view-for-dsh.native.";
+var PREFIX = "dsh-better-answer-view.native.";
 function registerNativeSlotBridge(ctx, base, decorate) {
   const disposers = [];
   const alias = (name) => `${PREFIX}${name}`;
@@ -1301,7 +1301,7 @@ function registerInlineAssistant(ctx) {
     let stopped = false;
     const reconcile = () => {
       if (stopped) return;
-      const candidates = ctx.slots.entries("conversation.chat.node").filter((entry) => entry.options.key === "assistant-step" && entry.registrant !== "better-view-for-dsh");
+      const candidates = ctx.slots.entries("conversation.chat.node").filter((entry) => entry.options.key === "assistant-step" && entry.registrant !== "dsh-better-answer-view");
       const base = candidates.find((entry) => entry.registrant === "@deepseek-ai/dsh-client-ui-chat") || candidates.find((entry) => (entry.options.priority ?? 0) >= 0);
       if (base === activeBase) return;
       const previousBridge = stopBridge;
@@ -1314,7 +1314,7 @@ function registerInlineAssistant(ctx) {
           stopBridge = registerNativeSlotBridge(ctx, base, inlineDecorator(ctx));
           setInlineReady(true);
         } catch (error) {
-          console.warn("[better-view-for-dsh] Inline renderer unavailable; keeping answer blocks at the end of the turn.", error);
+          console.warn("[dsh-better-answer-view] Inline renderer unavailable; keeping answer blocks at the end of the turn.", error);
         }
       }
     };

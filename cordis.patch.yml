@@ -1,5 +1,5 @@
 # Install this package into the selected DSH profile; its bundle manifest adds this patch.
 - insert:
     - id: web-answer
-      name: better-view-for-dsh
+      name: dsh-better-answer-view
       # Optional: config: { storageDir: /absolute/path/to/web-answer-data }

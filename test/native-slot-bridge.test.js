@@ -52,8 +52,8 @@ test('decorator aliases child slots and retains native injection, locale and com
   const element = entry.component({node: {data: {}}, renderSlot: (...args) => calls.push(args)});
   assert.equal(element.type, Decorated);
   element.props.renderSlot('native.images', {images: []});
-  assert.equal(calls[0][0], 'better-view-for-dsh.native.native.images');
-  const imageEntry = entries.get('better-view-for-dsh.native.native.images')[0];
+  assert.equal(calls[0][0], 'dsh-better-answer-view.native.native.images');
+  const imageEntry = entries.get('dsh-better-answer-view.native.native.images')[0];
   assert.equal(imageEntry.inject, entries.get('native.images')[0].inject);
   dispose();
   assert.deepEqual(entries.get('conversation.chat.node'), [base]);
@@ -66,8 +66,8 @@ test('native child replacement is mirrored and cleanup leaves the original untou
   const replacement = {component: () => null, options: {priority: 100}, locale: 'updated'};
   entries.set('native.reasoning', [replacement]);
   for (const listener of listeners.get('native.reasoning')) listener();
-  assert.equal(entries.get('better-view-for-dsh.native.native.reasoning').length, 1);
-  assert.equal(entries.get('better-view-for-dsh.native.native.reasoning')[0].locale, 'updated');
+  assert.equal(entries.get('dsh-better-answer-view.native.native.reasoning').length, 1);
+  assert.equal(entries.get('dsh-better-answer-view.native.native.reasoning')[0].locale, 'updated');
   dispose();
   assert.deepEqual(entries.get('native.reasoning'), [replacement]);
   assert.equal(listeners.get('native.reasoning').size, 0);

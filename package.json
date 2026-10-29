@@ -1,7 +1,7 @@
 {
-  "name": "better-view-for-dsh",
-  "version": "0.3.2",
-  "description": "Better View for DSH: inline charts, cards, and interactive answers for DeepSeek Harness, with durable state and revisions.",
+  "name": "dsh-better-answer-view",
+  "version": "0.3.3",
+  "description": "DSH Better Answer View: inline charts, cards, and interactive answers for DeepSeek Harness, with durable state and revisions.",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -63,13 +63,13 @@
     "screenshots.json"
   ],
   "author": "solstice621",
-  "homepage": "https://github.com/solstice621/better-view-for-dsh#readme",
+  "homepage": "https://github.com/solstice621/dsh-better-answer-view#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/solstice621/better-view-for-dsh.git"
+    "url": "git+https://github.com/solstice621/dsh-better-answer-view.git"
   },
   "bugs": {
-    "url": "https://github.com/solstice621/better-view-for-dsh/issues"
+    "url": "https://github.com/solstice621/dsh-better-answer-view/issues"
   },
   "keywords": [
     "dsh-plugin",

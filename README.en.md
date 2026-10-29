@@ -1,10 +1,10 @@
-# Better View for DSH
+# DSH Better Answer View
 
 [简体中文](README.md) | **English**
 
 Make AI answers easier to read and interact with.
 
-Better View for DSH is an inline visualization and interaction plugin for DeepSeek Harness. It guides the model to present suitable content as charts, cards, and interactive blocks inside its answers. Blocks can appear between paragraphs; parameters are saved locally, compatible state survives content updates, and previous versions remain accessible.
+DSH Better Answer View is an inline visualization and interaction plugin for DeepSeek Harness. It guides the model to present suitable content as charts, cards, and interactive blocks inside its answers. Blocks can appear between paragraphs; parameters are saved locally, compatible state survives content updates, and previous versions remain accessible.
 
 This is a working prototype tested with **DeepSeek Harness Web 0.1.5-rc.3** and **Desktop 0.2.1-rc.3**. It is not ChatGPT's internal implementation and does not require a new markup language.
 
@@ -98,8 +98,8 @@ Layouts vary with the model and question; these are specific observed outputs. O
 Requires Node.js 22 or later. Clone the repository and run:
 
 ```sh
-git clone https://github.com/solstice621/better-view-for-dsh.git
-cd better-view-for-dsh
+git clone https://github.com/solstice621/dsh-better-answer-view.git
+cd dsh-better-answer-view
 npm ci --legacy-peer-deps
 npm run build
 npm run demo
@@ -113,21 +113,21 @@ Optional environment variables: `PORT` selects the port; `WEB_ANSWER_DATA_DIR` s
 
 ## Install in DSH
 
-The project and plugin package are both named `better-view-for-dsh`. Version 0.3.2 renames the former `dsh-web-answer` package. Disable and remove the old package before installing the new one to avoid duplicate tool registration. The storage directory and receipt format remain compatible, preserving access to historical answers and saved state.
+The project and plugin package are both named `dsh-better-answer-view`. Version 0.3.3 replaces the former `dsh-web-answer` / `better-view-for-dsh` package names. Disable and remove the old package before installing the new one to avoid duplicate tool registration. The storage directory and receipt format remain compatible, preserving access to historical answers and saved state.
 
-Download the prebuilt `better-view-for-dsh-0.3.2.tgz` from the [GitHub Release](https://github.com/solstice621/better-view-for-dsh/releases/latest) and install it through the desktop plugin manager. No local build is needed. For CLI/Web:
+Download the prebuilt `dsh-better-answer-view-0.3.3.tgz` from the [GitHub Release](https://github.com/solstice621/dsh-better-answer-view/releases/latest) and install it through the desktop plugin manager. No local build is needed. For CLI/Web:
 
 ```sh
-dsh plugin --profile web add "https://github.com/solstice621/better-view-for-dsh/releases/download/v0.3.2/better-view-for-dsh-0.3.2.tgz"
+dsh plugin --profile web add "https://github.com/solstice621/dsh-better-answer-view/releases/download/v0.3.3/dsh-better-answer-view-0.3.3.tgz"
 ```
 
 The Git repository also includes the prebuilt client entry point, allowing Git installation:
 
 ```sh
-dsh plugin --profile web add "github:solstice621/better-view-for-dsh#v0.3.2"
+dsh plugin --profile web add "github:solstice621/dsh-better-answer-view#v0.3.3"
 ```
 
-The desktop application and a separately installed CLI/Web instance use different profiles; plugins do not synchronize automatically. For Desktop, build `better-view-for-dsh-0.3.2.tgz`, install it through the application's plugin manager, and enable it. Desktop uses the desktop profile. The CLI commands below install only into that CLI's web profile.
+The desktop application and a separately installed CLI/Web instance use different profiles; plugins do not synchronize automatically. For Desktop, build `dsh-better-answer-view-0.3.3.tgz`, install it through the application's plugin manager, and enable it. Desktop uses the desktop profile. The CLI commands below install only into that CLI's web profile.
 
 The repository contains source code. After installing dependencies, build and package the plugin:
 
@@ -136,7 +136,7 @@ npm run build
 npm pack
 ```
 
-Install the resulting `better-view-for-dsh-0.3.2.tgz` through the desktop plugin manager.
+Install the resulting `dsh-better-answer-view-0.3.3.tgz` through the desktop plugin manager.
 
 To link the built plugin into a DSH Web profile, run from the project directory:
 
