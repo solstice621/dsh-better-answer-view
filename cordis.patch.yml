@@ -1,0 +1,5 @@
+# Install this package into the selected DSH profile; its bundle manifest adds this patch.
+- insert:
+    - id: web-answer
+      name: dsh-web-answer
+      # Optional: config: { storageDir: /absolute/path/to/web-answer-data }

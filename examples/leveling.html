@@ -1,0 +1,75 @@
+<style>
+  .kicker{font-size:12px;letter-spacing:.12em;color:var(--answer-accent)}
+  .lead{color:var(--answer-muted);max-width:55ch}
+  .reward-label{display:flex;justify-content:space-between;gap:16px}
+  .reward-label output{font-variant-numeric:tabular-nums;font-weight:600}
+  .stages{margin:20px 0 12px;display:grid;gap:8px}
+  .stage{display:grid;grid-template-columns:44px minmax(0,1fr) 70px;gap:12px;align-items:center;width:100%;text-align:left;border:0;background:transparent;padding:12px}
+  .stage[aria-pressed=true]{background:var(--answer-accent-soft)}
+  .track{height:14px;border-radius:3px;background:var(--answer-border);overflow:hidden}
+  .bar{display:block;height:100%;background:var(--answer-accent);border-radius:3px}
+  .days{text-align:right;font-variant-numeric:tabular-nums}
+  #detail{font-size:13px;color:var(--answer-muted)}
+  .bottom{margin-top:20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  @media(max-width:420px){.stage{grid-template-columns:32px minmax(0,1fr) 58px;gap:8px;padding:9px 6px}}
+</style>
+<main>
+  <div class="kicker">机制分析 · 演示数值</div>
+  <h1>奖励变多，升级节奏怎样变？</h1>
+  <p class="lead">拖动任务奖励，比较三个阶段的耗时。参数会保存；选中一个阶段，可以带着当前条件继续讨论。</p>
+  <div class="card">
+    <label class="reward-label" for="reward"><span>每次任务奖励</span><output id="reward-output">100 XP</output></label>
+    <input id="reward" type="range" min="50" max="200" step="10" value="100">
+    <small>每天完成 3 次任务</small>
+  </div>
+  <div class="stages" role="group" aria-label="选择分析阶段">
+    <button class="stage" data-stage="0" aria-pressed="false"><span>前期</span><span class="track" aria-hidden="true"><span class="bar"></span></span><span class="days"></span></button>
+    <button class="stage" data-stage="1" aria-pressed="false"><span>中期</span><span class="track" aria-hidden="true"><span class="bar"></span></span><span class="days"></span></button>
+    <button class="stage" data-stage="2" aria-pressed="true"><span>后期</span><span class="track" aria-hidden="true"><span class="bar"></span></span><span class="days"></span></button>
+  </div>
+  <p id="detail" aria-live="polite"></p>
+  <div class="bottom"><small id="save-status" role="status">参数已恢复</small><button id="ask" class="primary">讨论当前阶段</button></div>
+  <details><summary>查看假设</summary><p>虚构数值：前、中、后期分别需要 900、3,600、9,000 XP。耗时＝阶段经验需求 ÷ 每日获得经验，采用连续估算，不计其他奖励。调整后的示例只将后期需求改为 6,300 XP。</p></details>
+</main>
+<script>
+  const thresholds = [900, 3600, 9000];
+  const phaseNames = ['前期', '中期', '后期'];
+  const restored = window.answer.getState();
+  let state = {
+    rewardXP: Number.isFinite(restored.rewardXP) ? Math.max(50, Math.min(200, restored.rewardXP)) : 100,
+    selectedPhase: [0, 1, 2].includes(restored.selectedPhase) ? restored.selectedPhase : 2
+  };
+  const slider = document.getElementById('reward');
+  const status = document.getElementById('save-status');
+  function render() {
+    slider.value = state.rewardXP;
+    document.getElementById('reward-output').textContent = state.rewardXP + ' XP';
+    document.querySelectorAll('[data-stage]').forEach((button, index) => {
+      const days = thresholds[index] / (state.rewardXP * 3);
+      button.setAttribute('aria-pressed', String(index === state.selectedPhase));
+      button.querySelector('.days').textContent = Number(days.toFixed(1)) + ' 天';
+      button.querySelector('.bar').style.width = (days / 60 * 100) + '%';
+    });
+    const selectedXP = thresholds[state.selectedPhase];
+    document.getElementById('detail').textContent = '已选' + phaseNames[state.selectedPhase] + '：' + selectedXP + ' XP ÷ 每天 ' + state.rewardXP * 3 + ' XP = ' + Number((selectedXP / (state.rewardXP * 3)).toFixed(1)) + ' 天';
+  }
+  let saving = Promise.resolve();
+  function save() {
+    const snapshot = {...state};
+    status.textContent = '正在保存…';
+    saving = saving.catch(() => {}).then(() => window.answer.setState(snapshot));
+    saving.then(() => {status.textContent = '参数已保存';}, error => {status.textContent = '保存失败：' + error.message;});
+  }
+  slider.addEventListener('input', () => {state.rewardXP = Number(slider.value); render();});
+  slider.addEventListener('change', save);
+  document.querySelectorAll('[data-stage]').forEach(button => button.addEventListener('click', () => {state.selectedPhase = Number(button.dataset.stage);render();save();}));
+  document.getElementById('ask').addEventListener('click', async () => {
+    try {
+      await saving;
+      await window.answer.setState({...state});
+      await window.answer.ask('请分析' + phaseNames[state.selectedPhase] + '的升级节奏，并说明可以如何调整。当前阶段需要 ' + thresholds[state.selectedPhase] + ' XP。');
+      status.textContent = '请在页面下方确认追问';
+    } catch(error) {status.textContent = error.message;}
+  });
+  render();
+</script>
