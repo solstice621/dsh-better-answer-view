@@ -1,6 +1,8 @@
-# DSH Web Answer
+# BetterView
 
-让 AI 自动把适合的内容显示成回答里的图表、卡片和交互块。图文块可以插在文字段落之间；参数保存到本机，模型更新内容时保留兼容的状态，并能回看历史版本。
+让 AI 回答更易读、更好交互。
+
+BetterView 是面向 DeepSeek Harness 的内嵌可视化与交互插件，让 AI 自动把适合的内容显示成回答里的图表、卡片和交互块。图文块可以插在文字段落之间；参数保存到本机，模型更新内容时保留兼容的状态，并能回看历史版本。
 
 这是可运行原型，适配 **DeepSeek Harness 网页版 0.1.5-rc.3** 和 **桌面版 0.2.1-rc.3**。不是 ChatGPT 内部实现，也不要求发明新的标记语言。
 
@@ -11,8 +13,8 @@
 需要 Node.js 22 或以上版本。克隆仓库后运行：
 
 ```sh
-git clone https://github.com/solstice621/dsh-web-answer.git
-cd dsh-web-answer
+git clone https://github.com/solstice621/better-view.git
+cd better-view
 npm ci --legacy-peer-deps
 npm run build
 npm run demo
@@ -25,6 +27,8 @@ npm run demo
 可用环境变量：`PORT` 指定端口，`WEB_ANSWER_DATA_DIR` 指定演示数据目录。默认数据写入项目的 `work/demo-data/`。
 
 ## 接入 DSH
+
+BetterView 的插件安装标识为 `dsh-web-answer`，与已有安装保持兼容。
 
 桌面应用和单独安装的 CLI/Web 使用不同的 profile，插件不会自动同步。桌面版应通过其插件管理器安装 `dsh-web-answer-0.3.1.tgz` 并启用；它使用 desktop profile。下列 CLI 命令仅安装到该 CLI 的 web profile。
 

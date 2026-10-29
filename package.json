@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-answer",
   "version": "0.3.1",
-  "description": "Inline interactive web answers with durable state and revisions for DeepSeek Harness.",
+  "description": "BetterView: inline charts, cards, and interactive answers for DeepSeek Harness, with durable state and revisions.",
   "type": "module",
   "private": true,
   "license": "MIT",
