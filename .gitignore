@@ -1,6 +1,7 @@
 node_modules/
 work/
-dist/
+dist/*
+!dist/client.js
 coverage/
 .env
 .env.*

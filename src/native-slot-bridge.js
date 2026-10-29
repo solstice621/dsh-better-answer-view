@@ -1,6 +1,6 @@
 import React from 'react';
 
-const PREFIX = 'dsh-web-answer.native.';
+const PREFIX = 'better-view-for-dsh.native.';
 
 /**
  * Keep DSH's own Markdown, image and reasoning renderers, including injection.

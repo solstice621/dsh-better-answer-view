@@ -83,7 +83,7 @@ function registerInlineAssistant(ctx) {
     const reconcile = () => {
       if (stopped) return;
       const candidates = ctx.slots.entries('conversation.chat.node').filter(entry =>
-        entry.options.key === 'assistant-step' && entry.registrant !== 'dsh-web-answer');
+        entry.options.key === 'assistant-step' && entry.registrant !== 'better-view-for-dsh');
       const base = candidates.find(entry => entry.registrant === '@deepseek-ai/dsh-client-ui-chat')
         || candidates.find(entry => (entry.options.priority ?? 0) >= 0);
       if (base === activeBase) return;
@@ -99,7 +99,7 @@ function registerInlineAssistant(ctx) {
           stopBridge = registerNativeSlotBridge(ctx, base, inlineDecorator(ctx));
           setInlineReady(true);
         } catch (error) {
-          console.warn('[dsh-web-answer] Inline renderer unavailable; keeping answer blocks at the end of the turn.', error);
+          console.warn('[better-view-for-dsh] Inline renderer unavailable; keeping answer blocks at the end of the turn.', error);
         }
       }
     };

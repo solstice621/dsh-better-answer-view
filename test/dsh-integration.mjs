@@ -34,7 +34,7 @@ try {
   const query = new URLSearchParams({ sessionId: receipt.sessionId, id: receipt.id });
   const apiPath = `/api/web-answer?${query}`;
   assert.equal((await fetch(origin + apiPath)).status, 401, 'Unauthenticated client must be refused');
-  assert.equal(await page.evaluate(() => JSON.stringify(window.__DSH_BOOT__).includes('dsh-web-answer')), true);
+  assert.equal(await page.evaluate(() => JSON.stringify(window.__DSH_BOOT__).includes('better-view-for-dsh')), true);
 
   async function openFixture() {
     await page.waitForTimeout(600);

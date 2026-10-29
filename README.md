@@ -1,10 +1,10 @@
-# DSH Better AnswerView
+# Better View for DSH
 
 **简体中文** | [English](README.en.md)
 
 让 AI 回答更易读、更好交互。
 
-DSH Better AnswerView 是面向 DeepSeek Harness 的内嵌可视化与交互插件，让 AI 自动把适合的内容显示成回答里的图表、卡片和交互块。图文块可以插在文字段落之间；参数保存到本机，模型更新内容时保留兼容的状态，并能回看历史版本。
+Better View for DSH 是面向 DeepSeek Harness 的内嵌可视化与交互插件，让 AI 自动把适合的内容显示成回答里的图表、卡片和交互块。图文块可以插在文字段落之间；参数保存到本机，模型更新内容时保留兼容的状态，并能回看历史版本。
 
 这是可运行原型，适配 **DeepSeek Harness 网页版 0.1.5-rc.3** 和 **桌面版 0.2.1-rc.3**。不是 ChatGPT 内部实现，也不要求发明新的标记语言。
 
@@ -96,8 +96,8 @@ DSH Better AnswerView 是面向 DeepSeek Harness 的内嵌可视化与交互插�
 需要 Node.js 22 或以上版本。克隆仓库后运行：
 
 ```sh
-git clone https://github.com/solstice621/dsh-better-answerview.git
-cd dsh-better-answerview
+git clone https://github.com/solstice621/better-view-for-dsh.git
+cd better-view-for-dsh
 npm ci --legacy-peer-deps
 npm run build
 npm run demo
@@ -111,9 +111,21 @@ npm run demo
 
 ## 接入 DSH
 
-DSH Better AnswerView 的插件安装标识为 `dsh-web-answer`，与已有安装保持兼容。
+项目名称与插件安装标识均为 `better-view-for-dsh`。0.3.2 将旧包 `dsh-web-answer` 更名；升级时先停用并移除旧包，再安装新包，避免同时注册同名工具。页面存储目录和回执格式保持兼容，历史回答及已保存状态仍可读取。
 
-桌面应用和单独安装的 CLI/Web 使用不同的 profile，插件不会自动同步。桌面版应通过其插件管理器安装 `dsh-web-answer-0.3.1.tgz` 并启用；它使用 desktop profile。下列 CLI 命令仅安装到该 CLI 的 web profile。
+推荐从 [GitHub Release](https://github.com/solstice621/better-view-for-dsh/releases/latest) 下载预构建的 `better-view-for-dsh-0.3.2.tgz`，在桌面插件管理器中安装；无需本地构建。CLI/Web 可直接运行：
+
+```sh
+dsh plugin --profile web add "https://github.com/solstice621/better-view-for-dsh/releases/download/v0.3.2/better-view-for-dsh-0.3.2.tgz"
+```
+
+Git 仓库也包含预构建的客户端入口，可从 Git 安装：
+
+```sh
+dsh plugin --profile web add "github:solstice621/better-view-for-dsh#v0.3.2"
+```
+
+桌面应用和单独安装的 CLI/Web 使用不同的 profile，插件不会自动同步。桌面版应通过其插件管理器安装 `better-view-for-dsh-0.3.2.tgz` 并启用；它使用 desktop profile。下列 CLI 命令仅安装到该 CLI 的 web profile。
 
 Git 仓库提供源码。完成依赖安装后，在项目目录构建并生成桌面安装包：
 
@@ -122,7 +134,7 @@ npm run build
 npm pack
 ```
 
-生成的 `dsh-web-answer-0.3.1.tgz` 可交给桌面版插件管理器安装。
+生成的 `better-view-for-dsh-0.3.2.tgz` 可交给桌面版插件管理器安装。
 
 构建完成后，向需要使用的 DSH Web profile 安装本地插件：
 
