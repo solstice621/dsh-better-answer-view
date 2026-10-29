@@ -262,3 +262,8 @@ DSH_CHAT_CLIENT_BUNDLE=/absolute/path/to/desktop/@deepseek-ai/dsh-client-ui-chat
 ```
 
 代码分工：`host.js` 注册工具和认证后的 HTTP API，`conversation.js` 把工具事件组装为聊天节点，`client.jsx` 接入 DSH 插槽，`view-ui.jsx` 管理页面 UI，`surface-runtime.js` 执行 iframe 与 bridge，`view-store.js` 管理持久化与历史。
+
+
+### 组件布局保护（0.3.5）
+
+`p.answer-note` 用于段落说明框，`.answer-inline-note` 用于行内说明，`.answer-cell-detail` 用于表格副文字。完整卡片优先使用 div/section/article 和自然高度。运行时修复可以随作者样式变化撤销，保留控件、折叠区域及定位图形的行为。支持边界和极限测试详见 [组件测试设计](test/COMPONENT_LAYOUT.md)。

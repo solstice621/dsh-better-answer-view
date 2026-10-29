@@ -136,6 +136,29 @@ function receiver() {
   // must not make the iframe's viewport its own sizing input (100vh -> a larger
   // iframe -> a larger 100vh). Keep intentional controls and graphics intact.
   const controlSelector = 'textarea,select,input,button,canvas,img,video,audio,[role="listbox"],[role="menu"],[role="tree"],[role="grid"],[role="slider"],[data-answer-scroll]';
+  const surfaceSelector = '.answer-block,.card,.answer-metric,.answer-decision,.answer-note,.answer-inline-note';
+  // Own only the declarations we repair. Re-read authored styles on every
+  // layout so a media query or class toggle can still hide/rearrange a surface.
+  const componentRepairs = new Map();
+  function repairLayout(node, property, value) {
+    if (node.style.getPropertyValue(property) === value && node.style.getPropertyPriority(property) === 'important') return;
+    let properties = componentRepairs.get(node);
+    if (!properties) componentRepairs.set(node, properties = new Map());
+    if (!properties.has(property)) properties.set(property, { value: node.style.getPropertyValue(property), priority: node.style.getPropertyPriority(property) });
+    node.style.setProperty(property, value, 'important');
+    properties.get(property).applied = node.style.getPropertyValue(property);
+  }
+  function restoreComponentRepairs() {
+    for (const [node, properties] of componentRepairs) {
+      for (const [property, previous] of properties) {
+        // A script's newer inline value takes precedence over our saved value.
+        if (node.style.getPropertyValue(property) !== previous.applied || node.style.getPropertyPriority(property) !== 'important') continue;
+        if (previous.value) node.style.setProperty(property, previous.value, previous.priority);
+        else node.style.removeProperty(property);
+      }
+    }
+    componentRepairs.clear();
+  }
   let controlledPanelIds = new Set();
   const labelTranslations = new WeakMap();
   const isClippedAlternative = (node) => {
@@ -150,33 +173,163 @@ function receiver() {
     }
     return false;
   };
-  const isLayoutBox = (node) => node.namespaceURI === 'http://www.w3.org/1999/xhtml' && !node.matches(controlSelector) && !node.closest('[data-answer-scroll]') && !isClippedAlternative(node);
+  const isControlledDescendant = (node) => {
+    for (let parent = node.parentElement; parent && parent !== root; parent = parent.parentElement) if (controlledPanelIds.has(parent.id)) return true;
+    return false;
+  };
+  const isLayoutBox = (node) => node.namespaceURI === 'http://www.w3.org/1999/xhtml' && !node.closest(controlSelector) && !node.closest('svg') && !isControlledDescendant(node) && !isClippedAlternative(node);
   const setLayout = (node, property, value) => {
     if (node.style.getPropertyValue(property) !== value || node.style.getPropertyPriority(property) !== 'important') node.style.setProperty(property, value, 'important');
   };
   const isGrid = (style) => style.display === 'grid' || style.display === 'inline-grid';
+  const contentWidth = (node) => {
+    const style = getComputedStyle(node);
+    return Math.max(0, node.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0));
+  };
+  const isDisclosure = (node, style) => controlledPanelIds.has(node.id) ||
+    node.closest('[hidden],[inert],[aria-hidden="true"]') || (style.display !== 'inline' && node.clientHeight <= 1) || parseFloat(style.maxHeight) === 0 ||
+    (style.transitionDuration.split(',').some(value => parseFloat(value) > 0) && /(?:all|height|block-size)/.test(style.transitionProperty));
+  function normalizeComponents() {
+    const surfaces = [];
+    let changes = [];
+    // Batch every read phase before its writes. Interleaving style writes and
+    // geometry reads here makes thousands of tiny surfaces quadratic in cost.
+    const change = (node, property, value) => changes.push([node, property, value]);
+    const flush = () => { for (const args of changes) repairLayout(...args); changes = []; };
+    for (const node of root.querySelectorAll(surfaceSelector)) {
+      if (!isLayoutBox(node)) continue;
+      const style = getComputedStyle(node);
+      if (isDisclosure(node, style) || style.position === 'absolute' || style.position === 'fixed') continue;
+      surfaces.push(node);
+      if (style.display !== 'inline') continue;
+      change(node, 'display', 'inline-block');
+      change(node, 'vertical-align', 'top');
+      // Adjacent text with compressed leading can paint outside its line box.
+      const parentStyle = getComputedStyle(node.parentElement);
+      const clearance = Math.max(0, ((parseFloat(parentStyle.fontSize) || 0) * 1.3 - parseFloat(parentStyle.lineHeight)) / 2);
+      if (Number.isFinite(clearance) && clearance > 0) for (const side of ['top', 'bottom']) {
+        const margin = parseFloat(style.getPropertyValue(`margin-${side}`)) || 0;
+        if (margin >= 0 && margin < clearance) change(node, `margin-${side}`, `${clearance}px`);
+      }
+      // Legacy inline table notes are compact; full block notes keep padding.
+      if (node.matches('.answer-note') && node.closest('td,th')) {
+        for (const side of ['top', 'right', 'bottom', 'left']) {
+          change(node, `margin-${side}`, '0px');
+          change(node, `padding-${side}`, '0px');
+        }
+        change(node, 'background-color', 'transparent');
+        change(node, 'line-height', '1.5');
+      }
+    }
+    flush();
+    for (const node of surfaces) {
+      const style = getComputedStyle(node);
+      if (/^(?:table|contents)/.test(style.display)) continue;
+      let container = node.parentElement;
+      while (container && container !== root && /^(?:inline|contents)$/.test(getComputedStyle(container).display)) container = container.parentElement;
+      const available = container ? contentWidth(container) : 0;
+      const border = (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.borderRightWidth) || 0);
+      const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      const glyph = (parseFloat(style.fontSize) || 0) * 1.2;
+      // Reduce decoration before sacrificing even one readable glyph.
+      if (available > 0 && padding + border + glyph > available) {
+        const budget = Math.max(0, available - border - glyph);
+        for (const side of ['left', 'right']) change(node, `padding-${side}`, `${padding ? (parseFloat(style.getPropertyValue(`padding-${side}`)) || 0) * budget / padding : 0}px`);
+      }
+    }
+    flush();
+    // Expand constrained normal-flow wrappers from the inside out as well as
+    // the surface itself. A grandchild must not overflow a 100%-height wrapper
+    // and paint across the next card. Positioned art and controls are excluded.
+    const expanding = new Set();
+    const descendants = Array.from(root.querySelectorAll('*')).reverse();
+    for (const node of descendants) {
+      const surface = node.closest(surfaceSelector);
+      if (!surface || !isLayoutBox(node)) continue;
+      const style = getComputedStyle(node);
+      if (style.display === 'inline' || style.display === 'contents' || style.display.startsWith('table') || isDisclosure(node, style)) continue;
+      let positioned = false;
+      for (let current = node; current && current !== surface.parentElement; current = current.parentElement) {
+        const currentStyle = getComputedStyle(current);
+        if (/^(?:absolute|fixed)$/.test(currentStyle.position) || (current !== node && isDisclosure(current, currentStyle))) { positioned = true; break; }
+      }
+      if (positioned) continue;
+      const childExpands = Array.from(node.children).some(child => expanding.has(child));
+      if (!childExpands && node.scrollHeight <= node.clientHeight + 1) continue;
+      const box = node.getBoundingClientRect();
+      const flowBottom = Array.from(node.childNodes).reduce((bottom, child) => {
+        if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) {
+          const range = document.createRange(); range.selectNode(child);
+          return Math.max(bottom, range.getBoundingClientRect().bottom);
+        }
+        if (!(child instanceof HTMLElement) || isClippedAlternative(child)) return bottom;
+        const childStyle = getComputedStyle(child);
+        return /^(?:absolute|fixed)$/.test(childStyle.position) ? bottom : Math.max(bottom, child.getBoundingClientRect().bottom);
+      }, box.top);
+      if (!childExpands && flowBottom <= box.bottom + 1) continue;
+      expanding.add(node);
+      if (style.display === 'block' && Array.from(node.children).some(child => getComputedStyle(child).cssFloat !== 'none')) change(node, 'display', 'flow-root');
+      change(node, 'height', 'auto');
+      change(node, 'max-height', 'none');
+      change(node, 'block-size', 'auto');
+      change(node, 'max-block-size', 'none');
+    }
+    flush();
+  }
   function preserveMetricNumbers(nodes) {
+    const metrics = [];
+    const gridMinimums = new Map();
+    const candidates = [];
     for (const node of nodes) {
       if (node.childElementCount || !/^[+\-−]?(?:[¥$€£]\s*)?\d[\d.,]*(?:\s*[%％倍])?$/.test(node.textContent.trim())) continue;
       const style = getComputedStyle(node);
       if (style.position === 'absolute' || (!node.matches('strong,b,output') && parseFloat(style.fontSize) < 18)) continue;
       // A metric's decimal point and percent sign belong to the same value.
       // Make room by reflowing the metric group, rather than breaking the token.
-      setLayout(node, 'white-space', 'nowrap');
-      setLayout(node, 'overflow-wrap', 'normal');
-      if (/flex/.test(getComputedStyle(node.parentElement).display)) setLayout(node, 'flex-shrink', '0');
+      candidates.push({ node, flex: /flex/.test(getComputedStyle(node.parentElement).display) });
+    }
+    for (const { node, flex } of candidates) {
+      repairLayout(node, 'white-space', 'nowrap');
+      repairLayout(node, 'overflow-wrap', 'normal');
+      if (flex) repairLayout(node, 'flex-shrink', '0');
+    }
+    for (const { node } of candidates) {
       const range = document.createRange();
       range.selectNodeContents(node);
       const required = range.getBoundingClientRect().width;
-      if (required <= node.getBoundingClientRect().width + 1) continue;
+      metrics.push({ node, required });
+      if (required > contentWidth(root) || required <= Math.min(node.getBoundingClientRect().width, contentWidth(node.parentElement)) + 1) continue;
       for (let cell = node, parent = node.parentElement; parent && parent !== root; cell = parent, parent = parent.parentElement) {
         const parentStyle = getComputedStyle(parent);
         if (!isGrid(parentStyle)) continue;
         const cellStyle = getComputedStyle(cell);
         const minimum = Math.max(120, Math.ceil(required + parseFloat(cellStyle.paddingLeft) + parseFloat(cellStyle.paddingRight)));
-        setLayout(parent, 'grid-template-columns', `repeat(auto-fit, minmax(min(${minimum}px, 100%), 1fr))`);
+        gridMinimums.set(parent, Math.max(minimum, gridMinimums.get(parent) || 0));
         break;
       }
+    }
+    for (const [parent, minimum] of gridMinimums) repairLayout(parent, 'grid-template-columns', `repeat(auto-fit, minmax(min(${minimum}px, 100%), 1fr))`);
+    return metrics;
+  }
+  function wrapOversizedMetrics(metrics) {
+    const oversized = [];
+    for (const { node, required } of metrics) {
+      let available = Infinity;
+      for (let current = node; current && root.contains(current); current = current.parentElement) {
+        const display = getComputedStyle(current).display;
+        if (display !== 'inline' && display !== 'contents' && current.clientWidth) available = Math.min(available, contentWidth(current));
+        if (current === root) break;
+      }
+      if (required <= available + 1) continue;
+      oversized.push(node);
+    }
+    for (const node of oversized) {
+      // Preserve the entire value when even reflow cannot fit it on one line.
+      // Never shrink it to unreadable text or rely on the iframe's clipping.
+      repairLayout(node, 'white-space', 'normal');
+      repairLayout(node, 'overflow-wrap', 'anywhere');
+      repairLayout(node, 'word-break', 'break-word');
+      repairLayout(node, 'flex-shrink', '1');
     }
   }
   function fitPositionedLabels(nodes) {
@@ -243,7 +396,6 @@ function receiver() {
     }
   }
   function normalizeInlineLayout() {
-    controlledPanelIds = new Set(Array.from(root.querySelectorAll('[aria-controls][aria-expanded]')).flatMap(node => node.getAttribute('aria-controls').split(/\s+/)));
     for (const styleNode of root.querySelectorAll('style')) {
       const visit = (rules) => {
         for (const rule of rules) {
@@ -256,7 +408,7 @@ function receiver() {
       if (styleNode.sheet) visit(styleNode.sheet.cssRules);
     }
     const nodes = Array.from(root.querySelectorAll('*')).filter(isLayoutBox);
-    preserveMetricNumbers(nodes);
+    const metrics = preserveMetricNumbers(nodes);
     for (const node of nodes) {
       normalizeViewportDeclaration(node.style, () => [node]);
       const computed = getComputedStyle(node);
@@ -269,9 +421,9 @@ function receiver() {
       const collapsed = node.clientHeight <= 1 || parseFloat(computed.maxHeight) === 0 || node.closest('[hidden],[inert],[aria-hidden="true"]');
       const disclosure = controlledPanelIds.has(node.id) || sizeTransition;
       if (!collapsed && !disclosure && /(?:auto|scroll|hidden|clip)/.test(computed.overflowY) && node.scrollHeight > node.clientHeight + 1) {
-        setLayout(node, 'height', 'auto');
-        setLayout(node, 'max-height', 'none');
-        setLayout(node, 'overflow-y', 'visible');
+        repairLayout(node, 'height', 'auto');
+        repairLayout(node, 'max-height', 'none');
+        repairLayout(node, 'overflow-y', 'visible');
       }
       if (node.clientWidth && node.scrollWidth > node.clientWidth + 1) {
         if (isGrid(computed)) {
@@ -286,25 +438,34 @@ function receiver() {
           });
           // Absolute chart labels can overflow a track even though the grid's
           // columns fit. Reflowing just that row would change its data scale.
-          if (tracksOverflow) setLayout(node, 'grid-template-columns', 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))');
+          if (tracksOverflow) repairLayout(node, 'grid-template-columns', 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))');
         }
-        if (computed.display === 'flex' || computed.display === 'inline-flex') setLayout(node, 'flex-wrap', 'wrap');
-        if (node.tagName === 'PRE') setLayout(node, 'white-space', 'pre-wrap');
-        setLayout(node, 'overflow-wrap', 'anywhere');
+        if (computed.display === 'flex' || computed.display === 'inline-flex') repairLayout(node, 'flex-wrap', 'wrap');
+        if (node.tagName === 'PRE') repairLayout(node, 'white-space', 'pre-wrap');
+        repairLayout(node, 'overflow-wrap', 'anywhere');
       }
       const available = node.parentElement?.clientWidth;
       if (available && node.getBoundingClientRect().width > available + 1) {
-        setLayout(node, 'min-width', '0px');
-        setLayout(node, 'max-width', '100%');
-        setLayout(node, 'width', '100%');
+        repairLayout(node, 'min-width', '0px');
+        repairLayout(node, 'max-width', '100%');
+        repairLayout(node, 'width', '100%');
       }
     }
+    wrapOversizedMetrics(metrics);
     fitPositionedLabels(nodes);
   }
   function measure() {
     measurementPending = false;
     if (!rendered) return;
-    if (embedded) normalizeInlineLayout();
+    mutationObserver.disconnect();
+    try {
+      restoreComponentRepairs();
+      controlledPanelIds = new Set(Array.from(root.querySelectorAll('[aria-controls][aria-expanded]')).flatMap(node => node.getAttribute('aria-controls').split(/\s+/)).filter(Boolean));
+      normalizeComponents();
+      if (embedded) normalizeInlineLayout();
+    } finally {
+      mutationObserver.observe(root, { subtree: true, childList: true, characterData: true, attributes: true });
+    }
     const bodyBox = document.body.getBoundingClientRect();
     // body is intrinsically sized; documentElement.scrollHeight is deliberately
     // not used because it is at least the *previous* iframe height and prevents
@@ -338,7 +499,8 @@ function receiver() {
   const resizeObserver = new ResizeObserver(scheduleMeasure);
   resizeObserver.observe(root);
   resizeObserver.observe(document.body);
-  new MutationObserver(scheduleMeasure).observe(root, { subtree: true, childList: true, characterData: true, attributes: true });
+  const mutationObserver = new MutationObserver(scheduleMeasure);
+  mutationObserver.observe(root, { subtree: true, childList: true, characterData: true, attributes: true });
   window.addEventListener('resize', scheduleMeasure);
   document.addEventListener('load', scheduleMeasure, true);
 
@@ -408,6 +570,7 @@ function receiver() {
         if (message.type === 'render') render(message);
         else if (message.type === 'theme') {
           document.documentElement.dataset.theme = message.theme === 'dark' ? 'dark' : 'light';
+          scheduleMeasure();
         } else if (message.type === 'response' && typeof message.id === 'string') {
           const action = pending.get(message.id);
           if (!action) return;

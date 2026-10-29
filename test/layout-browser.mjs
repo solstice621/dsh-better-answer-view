@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { build } from 'esbuild';
+import { runNoteLayoutBrowserTests } from './note-layout-browser.mjs';
+import { runComponentLayoutBrowserTests } from './component-layout-browser.mjs';
+import { runComponentStressBrowserTests } from './component-stress-browser.mjs';
 
 /** Exercise the real AnswerView and opaque iframe together, with native wheel input. */
 export async function runLayoutBrowserTests({ page, root, origin }) {
@@ -11,19 +14,19 @@ export async function runLayoutBrowserTests({ page, root, origin }) {
     window.layoutSaved={amount:7};
     const view={id:'layout-regression',revision:1,latestRevision:1,title:'自然高度回归',summary:'Natural layout',html:window.layoutHtml,state:window.layoutSaved,stateSchemaVersion:1,stateVersion:1};
     const api={get:async()=>({...view,state:window.layoutSaved}),list:async()=>[{revision:1}],save:async(session,id,payload)=>{window.layoutSaved=payload.state;return {...view,state:payload.state,stateVersion:2};}};
-    createRoot(document.getElementById('root')).render(<main style={{width:'100%',maxWidth:760,margin:'0 auto'}}><div id="before-answer" style={{height:90}}>前置说明</div><AnswerView receipt={view} sessionId="layout-test" api={api} embedded sendMessage={async()=>{}}/><div id="after-answer" style={{height:1400}}>后续说明</div></main>);
+    createRoot(document.getElementById('root')).render(<main style={{width:'100%',maxWidth:760,margin:'0 auto'}}><div id="before-answer" style={{height:90}}>前置说明</div><AnswerView receipt={view} sessionId="layout-test" api={api} embedded={window.layoutEmbedded} sendMessage={async()=>{}}/><div id="after-answer" style={{height:1400}}>后续说明</div></main>);
   `}});
   async function until(check, label) {
     const deadline=Date.now()+10000;
     while(!(await check())) {if(Date.now()>deadline)throw new Error(`Timed out: ${label}`);await new Promise(resolve=>setTimeout(resolve,40));}
   }
-  async function show(html, width=1100) {
+  async function show(html, width=1100, {embedded=true}={}) {
     await page.unroute('**/dist/demo.js');
-    await page.route('**/dist/demo.js',route=>route.fulfill({contentType:'text/javascript',body:`window.layoutHtml=${JSON.stringify(html)};\n${fixture.outputFiles[0].text}`}));
+    await page.route('**/dist/demo.js',route=>route.fulfill({contentType:'text/javascript',body:`window.layoutHtml=${JSON.stringify(html)};window.layoutEmbedded=${embedded};\n${fixture.outputFiles[0].text}`}));
     await page.setViewportSize({width,height:900});
     await page.goto(origin);
-    await page.locator('.wa-options .wa-status').filter({hasText:'页面已就绪'}).waitFor({state:'attached'});
-    assert.equal(await page.getByRole('button',{name:'展开高度',exact:true}).count(),0,'inline content has no height-expansion control');
+    await page.locator('.wa-status').filter({hasText:'页面已就绪'}).waitFor({state:'attached'});
+    if(embedded) assert.equal(await page.getByRole('button',{name:'展开高度',exact:true}).count(),0,'inline content has no height-expansion control');
     return page.frames().find(frame=>frame!==page.mainFrame());
   }
   async function metrics(frame) {
@@ -100,6 +103,10 @@ export async function runLayoutBrowserTests({ page, root, origin }) {
   assert.equal(await frame.locator('#notes').inputValue(),'输入框仍可编辑');
   await page.screenshot({path:`${root}/work/browser-layout-narrow.png`,fullPage:true});
   console.log('PASS: narrow fixed grid and wide table reflow without clipping; explanatory panes expand; textarea interaction is preserved');
+
+  await runNoteLayoutBrowserTests({ page, show });
+  await runComponentLayoutBrowserTests({ page, show });
+  await runComponentStressBrowserTests({ page, show });
 
   if(process.env.LAYOUT_REGRESSION_HTML) {
     const saved=await readFile(process.env.LAYOUT_REGRESSION_HTML,'utf8');

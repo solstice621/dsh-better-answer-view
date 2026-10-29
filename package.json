@@ -1,6 +1,6 @@
 {
   "name": "dsh-better-answer-view",
-  "version": "0.3.3",
+  "version": "0.3.5",
   "description": "DSH Better Answer View: inline charts, cards, and interactive answers for DeepSeek Harness, with durable state and revisions.",
   "type": "module",
   "private": true,
@@ -58,6 +58,7 @@
     "cordis.patch.yml",
     "README.md",
     "VALIDATION.md",
+    "test/COMPONENT_LAYOUT.md",
     "LICENSE",
     "README.en.md",
     "screenshots.json"

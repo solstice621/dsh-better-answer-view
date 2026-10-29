@@ -29,8 +29,8 @@ h1 { font-size:23px; } h2 { font-size:20px; } h3 { font-size:17px; } h4 { font-s
 #answer-content> :first-child,main> :first-child,article> :first-child,.answer-block> :first-child,.card> :first-child { margin-top:0; }
 #answer-content> :last-child,.answer-block> :last-child,.card> :last-child { margin-bottom:0; }
 p { margin:.65em 0 .9em; } ul,ol { margin:.7em 0; padding-left:1.4em; } li+li { margin-top:.3em; }
-small,.muted,.answer-caption,.answer-source { color:var(--answer-muted); }
-small,.answer-caption,.answer-source { font-size:12px; line-height:1.55; }
+small,.muted,.answer-caption,.answer-source,.answer-cell-detail { color:var(--answer-muted); }
+small,.answer-caption,.answer-source,.answer-cell-detail { font-size:12px; line-height:1.55; }
 a { color:var(--answer-accent); text-underline-offset:3px; } strong { font-weight:650; }
 button,input,select,textarea { font:inherit; }
 button { min-height:38px; max-width:100%; border:1px solid var(--answer-border); border-radius:8px; padding:7px 12px; background:var(--answer-soft); color:var(--answer-fg); cursor:pointer; }
@@ -43,6 +43,7 @@ input[type="range"] { width:100%; min-height:32px; margin:0; accent-color:var(--
 input[type="checkbox"],input[type="radio"] { accent-color:var(--answer-accent); }
 label { display:block; margin:.6em 0 .3em; } textarea { resize:vertical; min-height:80px; }
 .answer-block,.card { padding:16px; border:1px solid var(--answer-border); border-radius:var(--answer-radius); background:var(--answer-bg); }
+:where(.answer-block,.card,.answer-metric,.answer-decision,.answer-note,.answer-inline-note,.answer-cell-detail) { min-width:0; max-width:100%; overflow-wrap:anywhere; }
 .grid,.answer-metric-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr)); gap:12px; }
 .grid>*,.answer-metric-grid>* { min-width:0; }
 .row,.answer-block-heading,.answer-control-heading { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -76,6 +77,10 @@ label { display:block; margin:.6em 0 .3em; } textarea { resize:vertical; min-hei
 .answer-evidence>div { padding-bottom:10px; border-bottom:1px solid var(--answer-border); }
 .answer-evidence>div:last-child { padding-bottom:0; border-bottom:0; }
 .answer-note { margin:12px 0 0; padding:10px 12px; border-radius:8px; background:var(--answer-soft); color:var(--answer-muted); font-size:13px; }
+/* Explicit compact vocabulary; the runtime gives painted inline surfaces safe
+   boxes without overriding hidden elements, tables or authored grid/flex. */
+.answer-inline-note { padding:2px 6px; border-radius:4px; background:var(--answer-soft); color:var(--answer-muted); font-size:13px; }
+.answer-cell-detail { margin:0; padding:0; background:transparent; }
 .answer-source { display:block; margin-top:10px; }
 .answer-control { margin:14px 0; } .answer-control-heading label { margin:0; } .answer-control-heading output { color:var(--answer-accent); font-variant-numeric:tabular-nums; font-weight:600; }
 table { border-collapse:collapse; table-layout:fixed; width:100%; max-width:100%; font-size:13px; margin:14px 0; }

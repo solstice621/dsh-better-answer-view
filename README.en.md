@@ -263,3 +263,8 @@ DSH_CHAT_CLIENT_BUNDLE=/absolute/path/to/desktop/@deepseek-ai/dsh-client-ui-chat
 ```
 
 Code overview: `host.js` registers tools and authenticated HTTP APIs; `conversation.js` assembles tool events into conversation nodes; `client.jsx` integrates with DSH slots; `view-ui.jsx` manages page UI; `surface-runtime.js` runs the iframe and bridge; `view-store.js` handles persistence and history.
+
+
+### Component layout protection (0.3.5)
+
+Use `p.answer-note` for explanatory callouts, `.answer-inline-note` for inline annotations, and `.answer-cell-detail` for secondary table text. Full surfaces should use div/section/article and natural height. Layout repairs are reversible and preserve controls, disclosures, and positioned graphics. See [the component test design](test/COMPONENT_LAYOUT.md) for supported boundaries and stress coverage.
