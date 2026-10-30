@@ -1108,6 +1108,74 @@ function inlineAnswerIds(text) {
   return [...new Set(parseInlineReferences(text).filter((part) => part.kind === "answer").map((part) => part.id))];
 }
 
+// src/reply-conversation.js
+function projectReply(event) {
+  const content = event.data.message.content;
+  if (content.some((block) => block.type === "tool-call") || !content.some((block) => block.type === "text" && inlineAnswerIds(block.text).length > 0)) return null;
+  const blocks = content.filter((block) => block.type !== "reasoning").map((block) => {
+    if (block.type === "text") return { kind: "text", text: block.text };
+    if (block.type === "image") return { kind: "image", attachment: block.attachment };
+    return { kind: "other", block };
+  });
+  const { turn, step, interrupted } = event.data;
+  const finalNode = {
+    kind: "assistant",
+    seq: event.seq,
+    time: event.time,
+    turn,
+    step,
+    blocks,
+    messageId: event.data.message.id,
+    ...interrupted ? { interrupted: true } : {}
+  };
+  return { status: interrupted ? "interrupted" : "settled", turn, step, time: event.time, blocks, finalNode };
+}
+function updateReply(state, event) {
+  if (event.type === "llm/retry") return null;
+  return event.type === "assistant/message" ? projectReply(event) : state;
+}
+var webAnswerReplyDefinition = {
+  kind: "web-answer-reply",
+  target: "chat",
+  match(event) {
+    const { turn, step } = event?.data ?? {};
+    if (!Number.isSafeInteger(turn) || turn < 0 || !Number.isSafeInteger(step) || step < 0) return null;
+    const id = `${turn}:${step}`;
+    if (event.type === "step/start") return { id, role: "start" };
+    if (event.type === "llm/retry" || event.type === "assistant/message" && event.surfaceOp === "append" && event.data.message?.role === "assistant" && Array.isArray(event.data.message.content)) return { id, role: "update" };
+    return null;
+  },
+  start() {
+    return null;
+  },
+  update(context, match) {
+    return updateReply(context.state, match.event);
+  },
+  buildViewNode(context) {
+    let data = context.state;
+    if (data === void 0) {
+      data = null;
+      for (const match of context.matches) data = updateReply(data, match.event);
+    }
+    const location = context.matches.at(-1)?.location ?? context.start?.location ?? { kind: "unresolved" };
+    if (data === null) {
+      const current = context.current.get("chat");
+      return current == null ? null : { ...current, location, visibility: "hidden" };
+    }
+    return {
+      key: context.key,
+      kind: "web-answer-reply",
+      id: context.id,
+      target: "chat",
+      anchorSeq: data.finalNode.seq,
+      location,
+      groupTree: "turn",
+      visibility: "visible",
+      data
+    };
+  }
+};
+
 // src/conversation.js
 var ANSWER_TOOLS = /* @__PURE__ */ new Set(["render_answer", "update_answer"]);
 function isCoordinate(value) {
@@ -1148,7 +1216,7 @@ function resultReceipt(event) {
   }
 }
 function emptyState(turn) {
-  return { turn, callNames: /* @__PURE__ */ new Map(), views: /* @__PURE__ */ new Map(), assistantBlocks: /* @__PURE__ */ new Map(), latestStep: void 0, resultSeq: void 0, endSeq: void 0 };
+  return { turn, callNames: /* @__PURE__ */ new Map(), views: /* @__PURE__ */ new Map(), assistantBlocks: /* @__PURE__ */ new Map(), settledSteps: /* @__PURE__ */ new Set(), latestStep: void 0, resultSeq: void 0, endSeq: void 0 };
 }
 function isAssistantUpdate(event) {
   if (!isCoordinate(event.data.step)) return false;
@@ -1164,10 +1232,14 @@ function referenceBlock(block) {
 }
 function updateAssistant(state, event) {
   const assistantBlocks = new Map(state.assistantBlocks);
+  const settledSteps = new Set(state.settledSteps);
   const step = event.data.step;
-  if (event.type === "llm/retry") assistantBlocks.delete(step);
-  else if (event.type === "assistant/message") {
+  if (event.type === "llm/retry") {
+    assistantBlocks.delete(step);
+    settledSteps.delete(step);
+  } else if (event.type === "assistant/message") {
     assistantBlocks.set(step, event.data.message.content.map(referenceBlock));
+    settledSteps.add(step);
   } else {
     const blocks = [...assistantBlocks.get(step) || []];
     const chunk = event.data.chunk;
@@ -1183,24 +1255,35 @@ function updateAssistant(state, event) {
     }
     assistantBlocks.set(step, blocks);
   }
-  return { ...state, assistantBlocks };
+  return { ...state, assistantBlocks, settledSteps };
 }
 function projectedData(state) {
   const finalBlocks = state.assistantBlocks.get(state.latestStep) ?? [];
   const finalStep = finalBlocks.some((block) => block?.type === "text" && block.text.trim() !== "") && !finalBlocks.some((block) => block?.type === "tool-call") ? state.latestStep : null;
   const inlineStep = state.endSeq === void 0 ? void 0 : finalStep;
-  const inlineIds = /* @__PURE__ */ new Set();
-  for (const [step, blocks] of state.assistantBlocks) {
-    if (inlineStep !== void 0 && step !== inlineStep) continue;
+  const inlineOwners = /* @__PURE__ */ new Map();
+  const eligibleSteps = /* @__PURE__ */ new Set();
+  for (const [step, blocks] of [...state.assistantBlocks].sort(([a], [b]) => a - b)) {
+    const settledReply = state.settledSteps.has(step) && !blocks.some((block) => block?.type === "tool-call");
+    if (settledReply) eligibleSteps.add(step);
+    if (!settledReply && inlineStep !== void 0 && step !== inlineStep) continue;
     for (const block of blocks) {
       if (block?.type !== "text") continue;
-      for (const id of inlineAnswerIds(block.text)) if (state.views.has(id)) inlineIds.add(id);
+      for (const id of inlineAnswerIds(block.text)) if (state.views.has(id)) inlineOwners.set(id, step);
     }
   }
-  return { views: [...state.views.values()], inlineIds: [...inlineIds], inlineStep };
+  const ownedSteps = new Set(inlineOwners.values());
+  const promotedSteps = [...eligibleSteps].filter((step) => ownedSteps.has(step));
+  return {
+    views: [...state.views.values()],
+    inlineIds: [...inlineOwners.keys()],
+    inlineStep,
+    inlineOwners: [...inlineOwners],
+    promotedSteps
+  };
 }
 function sameData(left, right) {
-  return left !== void 0 && left.views.length === right.views.length && left.views.every((view, index) => view === right.views[index]) && left.inlineStep === right.inlineStep && left.inlineIds.length === right.inlineIds.length && left.inlineIds.every((id, index) => id === right.inlineIds[index]);
+  return left !== void 0 && left.views.length === right.views.length && left.views.every((view, index) => view === right.views[index]) && left.inlineStep === right.inlineStep && left.promotedSteps.length === right.promotedSteps.length && left.promotedSteps.every((step, index) => step === right.promotedSteps[index]) && left.inlineOwners.length === right.inlineOwners.length && left.inlineOwners.every(([id, step], index) => id === right.inlineOwners[index][0] && step === right.inlineOwners[index][1]) && left.inlineIds.length === right.inlineIds.length && left.inlineIds.every((id, index) => id === right.inlineIds[index]);
 }
 function foldEvent(state, event) {
   if (event.data.turn !== state.turn) return state;
@@ -1290,21 +1373,34 @@ var webAnswerDefinition = {
     };
   }
 };
+function registerWebAnswerConversation(ctx) {
+  const stopAnswers = ctx.uiConversation.events.register(webAnswerDefinition);
+  try {
+    const stopReplies = ctx.uiConversation.events.register(webAnswerReplyDefinition);
+    return () => {
+      stopReplies();
+      stopAnswers();
+    };
+  } catch (error) {
+    stopAnswers();
+    throw error;
+  }
+}
 
 // src/native-slot-bridge.js
 var import_react2 = __toESM(require("react"), 1);
 var PREFIX = "dsh-better-answer-view.native.";
-function registerNativeSlotBridge(ctx, base, decorate) {
+function registerNativeSlotBridge(ctx, base, decorate, key = "assistant-step") {
   const disposers = [];
-  const alias = (name) => `${PREFIX}${name}`;
+  const alias = (name) => `${PREFIX}${key === "assistant-step" ? "" : `${key}.`}${name}`;
   function bridge(entry, name, component, options = {}) {
     const children = entry.children;
     const childNames = Object.keys(children || {});
-    const mappedChildren = Object.fromEntries(childNames.map((key) => [alias(key), children[key]]));
+    const mappedChildren = Object.fromEntries(childNames.map((key2) => [alias(key2), children[key2]]));
     const Component = component || entry.component;
     function NativeWithAliases(props) {
-      const renderSlot = childNames.length === 0 ? props.renderSlot : (key, owner, opts) => props.renderSlot(alias(key), owner, opts);
-      const renderSlotChain = childNames.length === 0 ? props.renderSlotChain : (key, owner, opts) => props.renderSlotChain(alias(key), owner, opts);
+      const renderSlot = childNames.length === 0 ? props.renderSlot : (key2, owner, opts) => props.renderSlot(alias(key2), owner, opts);
+      const renderSlotChain = childNames.length === 0 ? props.renderSlotChain : (key2, owner, opts) => props.renderSlotChain(alias(key2), owner, opts);
       return import_react2.default.createElement(Component, { ...props, renderSlot, renderSlotChain });
     }
     const registration = {
@@ -1359,7 +1455,7 @@ function registerNativeSlotBridge(ctx, base, decorate) {
   }
   try {
     disposers.push(bridge(base, "conversation.chat.node", decorate(base.component), {
-      key: "assistant-step",
+      key,
       priority: (base.options.priority ?? 0) - 100
     }));
   } catch (error) {
@@ -1409,14 +1505,22 @@ function partsForBlocks(blocks, streaming) {
   flush();
   return parts;
 }
-function inlineDecorator(ctx) {
+function inlineDecorator(ctx, promoted = false) {
   return (NativeAssistant) => function InlineAssistant(props) {
     const { node, sessionId, groupPart, useTurnData } = props;
     const turnAnswers = useTurnData("web-answer");
     const receipts = turnAnswers?.views || EMPTY_VIEWS;
+    const ownsReply = turnAnswers?.promotedSteps?.includes(node.data.step);
+    if (promoted) {
+      if (node.visibility === "hidden" || !ownsReply) return null;
+      props = { ...props, groupPart: "response", node: { ...node, kind: "assistant-step" } };
+    } else if (ownsReply && groupPart !== "reasoning") {
+      const blocks = node.data.blocks.filter((block) => block.kind === "reasoning");
+      return blocks.some((block) => block.text?.trim()) && groupPart !== "response" ? /* @__PURE__ */ import_react3.default.createElement(NativeAssistant, { ...props, node: { ...node, data: { ...node.data, blocks } } }) : null;
+    }
     const parts = partsForBlocks(node.data.blocks, node.data.status === "running");
     if (groupPart === "reasoning" || !parts.some((part) => part.kind !== "native")) return /* @__PURE__ */ import_react3.default.createElement(NativeAssistant, { ...props });
-    if (turnAnswers?.inlineStep !== void 0 && node.data.step !== turnAnswers.inlineStep) {
+    if (!promoted && turnAnswers?.inlineStep !== void 0 && node.data.step !== turnAnswers.inlineStep) {
       const blocks = node.data.blocks.map((block) => block.kind !== "text" ? block : {
         ...block,
         text: parseInlineReferences(block.text).map((part) => part.kind === "text" ? part.text : receipts.some((view) => view.id === part.id) ? "\uFF08\u56FE\u6587\u5185\u5BB9\u89C1\u672C\u8F6E\u56DE\u7B54\u3002\uFF09\n" : `:::web-answer ${part.id}
@@ -1438,6 +1542,10 @@ function inlineDecorator(ctx) {
       }
       if (part.kind === "pending") return /* @__PURE__ */ import_react3.default.createElement("div", { key: `pending:${index}`, role: "status", style: { fontSize: 13, opacity: 0.65 } }, "\u6B63\u5728\u51C6\u5907\u56FE\u6587\u5185\u5BB9\u2026");
       const receipt = receipts.find((view) => view.id === part.id);
+      const owner = turnAnswers?.inlineOwners?.find(([id]) => id === part.id)?.[1];
+      if (receipt && owner !== void 0 && owner !== node.data.step) {
+        return /* @__PURE__ */ import_react3.default.createElement("span", { key: `elsewhere:${part.id}:${index}` }, "\uFF08\u56FE\u6587\u5185\u5BB9\u89C1\u672C\u8F6E\u56DE\u7B54\u3002\uFF09");
+      }
       if (!receipt) return /* @__PURE__ */ import_react3.default.createElement("div", { key: `missing:${index}`, role: "status", style: { fontSize: 13 } }, "\u8FD9\u5904\u56FE\u6587\u5185\u5BB9\u6682\u4E0D\u53EF\u7528\uFF08", part.id, "\uFF09\u3002");
       return /* @__PURE__ */ import_react3.default.createElement(
         AnswerView,
@@ -1470,10 +1578,16 @@ function registerInlineAssistant(ctx) {
       setInlineReady(false);
       previousBridge?.();
       if (base) {
+        const bridges = [];
         try {
-          stopBridge = registerNativeSlotBridge(ctx, base, inlineDecorator(ctx));
+          bridges.push(registerNativeSlotBridge(ctx, base, inlineDecorator(ctx)));
+          bridges.push(registerNativeSlotBridge(ctx, base, inlineDecorator(ctx, true), "web-answer-reply"));
+          stopBridge = () => {
+            for (const dispose of bridges.reverse()) dispose();
+          };
           setInlineReady(true);
         } catch (error) {
+          for (const dispose of bridges.reverse()) dispose();
           console.warn("[dsh-better-answer-view] Inline renderer unavailable; keeping answer blocks at the end of the turn.", error);
         }
       }
@@ -1515,7 +1629,7 @@ function ToolReceipt({ block, toolName, inspect }) {
 }
 var inject = ["slots", "uiConversation", "sessions", "conversation"];
 function apply(ctx) {
-  ctx.uiConversation.events.register(webAnswerDefinition);
+  registerWebAnswerConversation(ctx);
   registerInlineAssistant(ctx);
   ctx.slots.inject("conversation.chat.node", () => ctx.slots.register({
     name: "conversation.chat.node",

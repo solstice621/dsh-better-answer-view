@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 import { registerWebAnswerConversation, webAnswerDefinition } from '../src/conversation.js';
+import { webAnswerReplyDefinition } from '../src/reply-conversation.js';
 
 function event(type, seq, data) {
   return { type, seq, time: 1700000000000 + seq, data };
@@ -86,14 +87,15 @@ function fold(events) {
   return [...contexts.values()].map(context => webAnswerDefinition.buildViewNode(context)).filter(Boolean);
 }
 
-test('registers exactly the independent web-answer Definition', () => {
-  const dispose = () => {};
-  let registered;
-  const ctx = { uiConversation: { events: { register(value) { registered = value; return dispose; } } } };
-  assert.equal(registerWebAnswerConversation(ctx), dispose);
-  assert.equal(registered, webAnswerDefinition);
-  assert.equal(registered.kind, 'web-answer');
-  assert.equal(registered.target, 'chat');
+test('registers and disposes both answer receipts and non-folding reply seats', () => {
+  const registered = [], disposed = [];
+  const ctx = { uiConversation: { events: { register(value) {
+    registered.push(value); return () => disposed.push(value.kind);
+  } } } };
+  const dispose = registerWebAnswerConversation(ctx);
+  assert.deepEqual(registered, [webAnswerDefinition, webAnswerReplyDefinition]);
+  dispose();
+  assert.deepEqual(disposed, ['web-answer-reply', 'web-answer']);
 });
 
 test('ordinary turns and errors do not produce a web answer', () => {
@@ -113,7 +115,7 @@ test('publishes on a successful result and anchors the same node to turn/end', (
   assert.equal(settled.visibility, 'visible');
   assert.equal(settled.groupTree, 'turn');
   assert.equal(settled.location.turn.end.seq, 20);
-  assert.deepEqual(settled.data, { views: [receipt()], inlineIds: [], inlineStep: null });
+  assert.deepEqual(settled.data, { views: [receipt()], inlineIds: [], inlineStep: null, inlineOwners: [], promotedSteps: [] });
 });
 
 test('keeps each view once, retains first appearance order, and never regresses revisions', () => {
@@ -278,7 +280,7 @@ test('markers cannot be assembled across separate text blocks', () => {
   assert.deepEqual(fallbackIds(node), [ANSWER_A]);
 });
 
-test('completed turns restore fallback when an intermediate inline marker is folded before the final reply', () => {
+test('completed turns retain the earlier inline answer when a later clarification settles', () => {
   const intermediate = [start(), call(2), result(3, receipt(ANSWER_A)), assistant(4, marker(ANSWER_A), { step: 2 })];
   const [running] = fold(intermediate);
   assert.deepEqual(fallbackIds(running), []);
@@ -286,9 +288,10 @@ test('completed turns restore fallback when an intermediate inline marker is fol
 
   const finalText = [...intermediate, assistant(5, 'Final plain-text explanation.', { step: 3 }), end()];
   const [settled] = fold(finalText);
-  assert.deepEqual(fallbackIds(settled), [ANSWER_A]);
+  assert.deepEqual(fallbackIds(settled), []);
   assert.equal(settled.data.inlineStep, 3);
-  assert.deepEqual(settled.location.turn.data.get('web-answer').inlineIds, []);
+  assert.deepEqual(settled.data.promotedSteps, [2]);
+  assert.deepEqual(settled.location.turn.data.get('web-answer').inlineIds, [ANSWER_A]);
   assert.deepEqual(fold(finalText.slice(2))[0].data, settled.data);
 
   const [finalInline] = fold([...intermediate, assistant(5, `Final\n\n${marker(ANSWER_A)}`, { step: 3 }), end()]);
@@ -307,7 +310,8 @@ test('a last tool, reasoning-only, or empty step cannot hide an earlier page as 
   for (const lastStep of lastSteps) {
     const [node] = fold([...prefix, lastStep, end()]);
     assert.equal(node.data.inlineStep, null);
-    assert.deepEqual(fallbackIds(node), [ANSWER_A]);
+    assert.deepEqual(node.data.promotedSteps, [2]);
+    assert.deepEqual(fallbackIds(node), []);
   }
 });
 
