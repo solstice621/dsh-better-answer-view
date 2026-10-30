@@ -6,7 +6,7 @@ Make AI answers easier to read and interact with.
 
 DSH Better Answer View is an inline visualization and interaction plugin for DeepSeek Harness. It guides the model to present suitable content as charts, cards, and interactive blocks inside its answers. Blocks can appear between paragraphs; parameters are saved locally, compatible state survives content updates, and previous versions remain accessible.
 
-This is a working prototype tested with **DeepSeek Harness Web 0.1.5-rc.3** and **Desktop 0.2.1-rc.3**. It is not ChatGPT's internal implementation and does not require a new markup language.
+This working prototype was tested with **DeepSeek Harness Web 0.1.5-rc.3** and **Desktop 0.2.1-rc.3**. It does not restrict Harness release numbers; SDK peers accept the host-provided versions. Activation checks the required tool-registration and authenticated Fetch APIs and reports missing interfaces. Tested versions are evidence of specific checks; other releases still need validation.
 
 ## See it in action
 
@@ -115,19 +115,19 @@ Optional environment variables: `PORT` selects the port; `WEB_ANSWER_DATA_DIR` s
 
 The project and plugin package are both named `dsh-better-answer-view`. Version 0.3.3 replaces the former `dsh-web-answer` / `better-view-for-dsh` package names. Disable and remove the old package before installing the new one to avoid duplicate tool registration. The storage directory and receipt format remain compatible, preserving access to historical answers and saved state.
 
-Download the prebuilt `dsh-better-answer-view-0.3.3.tgz` from the [GitHub Release](https://github.com/solstice621/dsh-better-answer-view/releases/latest) and install it through the desktop plugin manager. No local build is needed. For CLI/Web:
+Install the current main branch for the implementation without a host-version allowlist. The repository includes the prebuilt client; no local build is required. For CLI/Web:
 
 ```sh
-dsh plugin --profile web add "https://github.com/solstice621/dsh-better-answer-view/releases/download/v0.3.3/dsh-better-answer-view-0.3.3.tgz"
+dsh plugin --profile web add "github:solstice621/dsh-better-answer-view#main"
 ```
 
-The Git repository also includes the prebuilt client entry point, allowing Git installation:
+Enter this address in the desktop plugin manager:
 
-```sh
-dsh plugin --profile web add "github:solstice621/dsh-better-answer-view#v0.3.3"
+```text
+github:solstice621/dsh-better-answer-view#main
 ```
 
-The desktop application and a separately installed CLI/Web instance use different profiles; plugins do not synchronize automatically. For Desktop, build `dsh-better-answer-view-0.3.3.tgz`, install it through the application's plugin manager, and enable it. Desktop uses the desktop profile. The CLI commands below install only into that CLI's web profile.
+Desktop and separately installed CLI/Web instances use different profiles. Desktop uses its desktop profile; the command above installs only into the CLI's web profile. Historical [GitHub Releases](https://github.com/solstice621/dsh-better-answer-view/releases) retain their own compatibility declarations.
 
 The repository contains source code. After installing dependencies, build and package the plugin:
 
@@ -136,7 +136,7 @@ npm run build
 npm pack
 ```
 
-Install the resulting `dsh-better-answer-view-0.3.3.tgz` through the desktop plugin manager.
+Install the resulting `.tgz` through the desktop plugin manager.
 
 To link the built plugin into a DSH Web profile, run from the project directory:
 

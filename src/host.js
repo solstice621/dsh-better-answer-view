@@ -332,6 +332,11 @@ export function storageDirectory(config = {}, environment = process.env) {
 }
 
 export function apply(ctx, config = {}) {
+  const missing = [
+    ['tools.register', ctx?.tools?.register],
+    ['connection.fetch.register', ctx?.connection?.fetch?.register],
+  ].filter(([, method]) => typeof method !== 'function').map(([api]) => api);
+  if (missing.length) throw new Error(`dsh-better-answer-view: Harness is missing required APIs: ${missing.join(', ')}`);
   const store = new ViewStore(storageDirectory(config));
   for (const tool of createToolDefinitions(store)) ctx.tools.register(tool);
   ctx.connection.fetch.register({ path: API_PATH, methods: ['GET', 'POST'], requestBody: 'buffered', fetch: createApiHandler(store) });

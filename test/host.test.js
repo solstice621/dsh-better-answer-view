@@ -40,6 +40,20 @@ test('registration is side-effect-free until an answer is created', async (t) =>
   await assert.rejects(access(root), { code: 'ENOENT' });
 });
 
+test('missing host APIs are reported before any tool or route is registered', () => {
+  for (const api of ['tools.register', 'connection.fetch.register']) {
+    const registered = [];
+    const ctx = {
+      tools: { register: tool => registered.push(tool) },
+      connection: { fetch: { register: route => registered.push(route) } },
+    };
+    if (api === 'tools.register') ctx.tools.register = undefined;
+    else ctx.connection.fetch.register = 'unavailable';
+    assert.throws(() => apply(ctx), error => error.message.includes('dsh-better-answer-view') && error.message.includes(api));
+    assert.deepEqual(registered, []);
+  }
+});
+
 test('registered presentation policy and shared visual guidance reach prompt and both writing tools', () => {
   const tools = [], sections = [];
   apply({

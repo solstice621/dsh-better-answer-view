@@ -6,8 +6,7 @@
   "private": true,
   "license": "MIT",
   "engines": {
-    "node": ">=22",
-    "dsh": "0.1.5-rc.3 || 0.2.1-rc.3"
+    "node": ">=22"
   },
   "main": "src/host.js",
   "exports": {
@@ -31,7 +30,7 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.3 || 0.2.1-rc.3"
+    "@deepseek-ai/dsh-tools": "*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-tools": {

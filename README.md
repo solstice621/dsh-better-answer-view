@@ -6,7 +6,7 @@
 
 DSH Better Answer View 是面向 DeepSeek Harness 的内嵌可视化与交互插件，让 AI 自动把适合的内容显示成回答里的图表、卡片和交互块。图文块可以插在文字段落之间；参数保存到本机，模型更新内容时保留兼容的状态，并能回看历史版本。
 
-这是可运行原型，适配 **DeepSeek Harness 网页版 0.1.5-rc.3** 和 **桌面版 0.2.1-rc.3**。不是 ChatGPT 内部实现，也不要求发明新的标记语言。
+这是可运行原型，已在 **DeepSeek Harness 网页版 0.1.5-rc.3** 和 **桌面版 0.2.1-rc.3** 验证。插件不设 Harness 版本白名单，SDK peer 依赖接受宿主提供的版本；启动时检查所需的工具注册和认证 Fetch 接口，缺少接口会明确报错。测试记录列出实测环境，其他版本仍需验证。
 
 ## 看看回答会变成什么样
 
@@ -113,19 +113,19 @@ npm run demo
 
 项目名称与插件安装标识均为 `dsh-better-answer-view`。0.3.3 将旧包 `dsh-web-answer` / `better-view-for-dsh` 统一更名；升级时先停用并移除旧包，再安装新包，避免同时注册同名工具。页面存储目录和回执格式保持兼容，历史回答及已保存状态仍可读取。
 
-推荐从 [GitHub Release](https://github.com/solstice621/dsh-better-answer-view/releases/latest) 下载预构建的 `dsh-better-answer-view-0.3.3.tgz`，在桌面插件管理器中安装；无需本地构建。CLI/Web 可直接运行：
+推荐从当前 main 安装，仓库已包含预构建的客户端入口，无需本地构建。CLI/Web：
 
 ```sh
-dsh plugin --profile web add "https://github.com/solstice621/dsh-better-answer-view/releases/download/v0.3.3/dsh-better-answer-view-0.3.3.tgz"
+dsh plugin --profile web add "github:solstice621/dsh-better-answer-view#main"
 ```
 
-Git 仓库也包含预构建的客户端入口，可从 Git 安装：
+桌面版在插件管理器中填写：
 
-```sh
-dsh plugin --profile web add "github:solstice621/dsh-better-answer-view#v0.3.3"
+```text
+github:solstice621/dsh-better-answer-view#main
 ```
 
-桌面应用和单独安装的 CLI/Web 使用不同的 profile，插件不会自动同步。桌面版应通过其插件管理器安装 `dsh-better-answer-view-0.3.3.tgz` 并启用；它使用 desktop profile。下列 CLI 命令仅安装到该 CLI 的 web profile。
+桌面应用和单独安装的 CLI/Web 使用不同的 profile，插件不会自动同步。桌面插件管理器使用 desktop profile；以上 CLI 命令只安装到该 CLI 的 web profile。历史 [GitHub Release](https://github.com/solstice621/dsh-better-answer-view/releases) 使用各自的旧版兼容声明。
 
 Git 仓库提供源码。完成依赖安装后，在项目目录构建并生成桌面安装包：
 
@@ -134,7 +134,7 @@ npm run build
 npm pack
 ```
 
-生成的 `dsh-better-answer-view-0.3.3.tgz` 可交给桌面版插件管理器安装。
+生成的 `.tgz` 可交给桌面版插件管理器安装。
 
 构建完成后，向需要使用的 DSH Web profile 安装本地插件：
 
