@@ -7,9 +7,9 @@ const PREFIX = 'dsh-better-answer-view.native.';
  * Child slot declarations have one owner in DSH, so a decorating renderer uses
  * private aliases instead of attempting to redeclare the native child names.
  */
-export function registerNativeSlotBridge(ctx, base, decorate) {
+export function registerNativeSlotBridge(ctx, base, decorate, key = 'assistant-step') {
   const disposers = [];
-  const alias = name => `${PREFIX}${name}`;
+  const alias = name => `${PREFIX}${key === 'assistant-step' ? '' : `${key}.`}${name}`;
 
   function bridge(entry, name, component, options = {}) {
     const children = entry.children;
@@ -76,7 +76,7 @@ export function registerNativeSlotBridge(ctx, base, decorate) {
 
   try {
     disposers.push(bridge(base, 'conversation.chat.node', decorate(base.component), {
-      key: 'assistant-step',
+      key,
       priority: (base.options.priority ?? 0) - 100,
     }));
   } catch (error) {

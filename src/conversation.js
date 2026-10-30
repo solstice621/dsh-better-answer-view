@@ -7,6 +7,7 @@
  */
 
 import { inlineAnswerIds } from './inline-reference.js';
+import { webAnswerReplyDefinition } from './reply-conversation.js';
 
 const ANSWER_TOOLS = new Set(['render_answer', 'update_answer']);
 
@@ -68,7 +69,7 @@ function resultReceipt(event) {
 }
 
 function emptyState(turn) {
-  return { turn, callNames: new Map(), views: new Map(), assistantBlocks: new Map(), latestStep: undefined, resultSeq: undefined, endSeq: undefined };
+  return { turn, callNames: new Map(), views: new Map(), assistantBlocks: new Map(), settledSteps: new Set(), latestStep: undefined, resultSeq: undefined, endSeq: undefined };
 }
 
 function isAssistantUpdate(event) {
@@ -92,10 +93,15 @@ function referenceBlock(block) {
 
 function updateAssistant(state, event) {
   const assistantBlocks = new Map(state.assistantBlocks);
+  const settledSteps = new Set(state.settledSteps);
   const step = event.data.step;
-  if (event.type === 'llm/retry') assistantBlocks.delete(step);
+  if (event.type === 'llm/retry') {
+    assistantBlocks.delete(step);
+    settledSteps.delete(step);
+  }
   else if (event.type === 'assistant/message') {
     assistantBlocks.set(step, event.data.message.content.map(referenceBlock));
+    settledSteps.add(step);
   } else {
     const blocks = [...(assistantBlocks.get(step) || [])];
     const chunk = event.data.chunk;
@@ -111,31 +117,43 @@ function updateAssistant(state, event) {
     }
     assistantBlocks.set(step, blocks);
   }
-  return { ...state, assistantBlocks };
+  return { ...state, assistantBlocks, settledSteps };
 }
 
 function projectedData(state) {
   const finalBlocks = state.assistantBlocks.get(state.latestStep) ?? [];
-  // DSH's latestAnswer only promotes the last step, with reply content and no
-  // tool call. A marker in an earlier step will be folded with the process.
+  // Keep the native final-step boundary for unfinished/tool-calling messages.
+  // Settled visual replies have their own turn-level seat, so a later plain
+  // clarification cannot fold their prose or detach their inline cards.
   const finalStep = finalBlocks.some(block => block?.type === 'text' && block.text.trim() !== '')
     && !finalBlocks.some(block => block?.type === 'tool-call') ? state.latestStep : null;
   const inlineStep = state.endSeq === undefined ? undefined : finalStep;
-  const inlineIds = new Set();
-  for (const [step, blocks] of state.assistantBlocks) {
-    if (inlineStep !== undefined && step !== inlineStep) continue;
+  const inlineOwners = new Map();
+  const eligibleSteps = new Set();
+  for (const [step, blocks] of [...state.assistantBlocks].sort(([a], [b]) => a - b)) {
+    const settledReply = state.settledSteps.has(step)
+      && !blocks.some(block => block?.type === 'tool-call');
+    if (settledReply) eligibleSteps.add(step);
+    if (!settledReply && inlineStep !== undefined && step !== inlineStep) continue;
     for (const block of blocks) {
       if (block?.type !== 'text') continue;
-      for (const id of inlineAnswerIds(block.text)) if (state.views.has(id)) inlineIds.add(id);
+      for (const id of inlineAnswerIds(block.text)) if (state.views.has(id)) inlineOwners.set(id, step);
     }
   }
-  return { views: [...state.views.values()], inlineIds: [...inlineIds], inlineStep };
+  const ownedSteps = new Set(inlineOwners.values());
+  const promotedSteps = [...eligibleSteps].filter(step => ownedSteps.has(step));
+  return { views: [...state.views.values()], inlineIds: [...inlineOwners.keys()], inlineStep,
+    inlineOwners: [...inlineOwners], promotedSteps };
 }
 
 function sameData(left, right) {
   return left !== undefined && left.views.length === right.views.length
     && left.views.every((view, index) => view === right.views[index])
     && left.inlineStep === right.inlineStep
+    && left.promotedSteps.length === right.promotedSteps.length
+    && left.promotedSteps.every((step, index) => step === right.promotedSteps[index])
+    && left.inlineOwners.length === right.inlineOwners.length
+    && left.inlineOwners.every(([id, step], index) => id === right.inlineOwners[index][0] && step === right.inlineOwners[index][1])
     && left.inlineIds.length === right.inlineIds.length
     && left.inlineIds.every((id, index) => id === right.inlineIds[index]);
 }
@@ -239,5 +257,12 @@ export const webAnswerDefinition = {
 
 /** Register alongside the plugin's conversation.chat.node renderer. */
 export function registerWebAnswerConversation(ctx) {
-  return ctx.uiConversation.events.register(webAnswerDefinition);
+  const stopAnswers = ctx.uiConversation.events.register(webAnswerDefinition);
+  try {
+    const stopReplies = ctx.uiConversation.events.register(webAnswerReplyDefinition);
+    return () => { stopReplies(); stopAnswers(); };
+  } catch (error) {
+    stopAnswers();
+    throw error;
+  }
 }

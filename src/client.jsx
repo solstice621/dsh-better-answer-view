@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useSyncExternalStore } from 'react';
 import { AnswerView, createApi } from './view-ui.jsx';
-import { webAnswerDefinition } from './conversation.js';
+import { registerWebAnswerConversation } from './conversation.js';
 import { parseInlineReferences } from './inline-reference.js';
 import { registerNativeSlotBridge } from './native-slot-bridge.js';
 
@@ -34,16 +34,25 @@ function partsForBlocks(blocks, streaming) {
   return parts;
 }
 
-function inlineDecorator(ctx) {
+function inlineDecorator(ctx, promoted = false) {
   return NativeAssistant => function InlineAssistant(props) {
     const {node, sessionId, groupPart, useTurnData} = props;
     const turnAnswers = useTurnData('web-answer');
     const receipts = turnAnswers?.views || EMPTY_VIEWS;
+    const ownsReply = turnAnswers?.promotedSteps?.includes(node.data.step);
+    if (promoted) {
+      if (node.visibility === 'hidden' || !ownsReply) return null;
+      props = {...props, groupPart: 'response', node: {...node, kind: 'assistant-step'}};
+    } else if (ownsReply && groupPart !== 'reasoning') {
+      const blocks = node.data.blocks.filter(block => block.kind === 'reasoning');
+      return blocks.some(block => block.text?.trim()) && groupPart !== 'response'
+        ? <NativeAssistant {...props} node={{...node, data: {...node.data, blocks}}} /> : null;
+    }
     const parts = partsForBlocks(node.data.blocks, node.data.status === 'running');
     // Unmarked answers, reasoning-only seats, and ordinary code examples retain
     // the native renderer intact, with no replacement of historical content.
     if (groupPart === 'reasoning' || !parts.some(part => part.kind !== 'native')) return <NativeAssistant {...props} />;
-    if (turnAnswers?.inlineStep !== undefined && node.data.step !== turnAnswers.inlineStep) {
+    if (!promoted && turnAnswers?.inlineStep !== undefined && node.data.step !== turnAnswers.inlineStep) {
       // Completed intermediate steps may be folded by DSH. Their diagrams are
       // delivered by the final-answer/fallback seat, not hidden in the process.
       const blocks = node.data.blocks.map(block => block.kind !== 'text' ? block : {
@@ -66,6 +75,10 @@ function inlineDecorator(ctx) {
         }
         if (part.kind === 'pending') return <div key={`pending:${index}`} role="status" style={{fontSize: 13, opacity: 0.65}}>正在准备图文内容…</div>;
         const receipt = receipts.find(view => view.id === part.id);
+        const owner = turnAnswers?.inlineOwners?.find(([id]) => id === part.id)?.[1];
+        if (receipt && owner !== undefined && owner !== node.data.step) {
+          return <span key={`elsewhere:${part.id}:${index}`}>（图文内容见本轮回答。）</span>;
+        }
         // Only successful, session-bound tool receipts authorize an embed.
         if (!receipt) return <div key={`missing:${index}`} role="status" style={{fontSize: 13}}>这处图文内容暂不可用（{part.id}）。</div>;
         return <AnswerView key={`answer:${part.id}:${index}`} embedded sessionId={receipt.sessionId}
@@ -95,10 +108,14 @@ function registerInlineAssistant(ctx) {
       setInlineReady(false);
       previousBridge?.();
       if (base) {
+        const bridges = [];
         try {
-          stopBridge = registerNativeSlotBridge(ctx, base, inlineDecorator(ctx));
+          bridges.push(registerNativeSlotBridge(ctx, base, inlineDecorator(ctx)));
+          bridges.push(registerNativeSlotBridge(ctx, base, inlineDecorator(ctx, true), 'web-answer-reply'));
+          stopBridge = () => { for (const dispose of bridges.reverse()) dispose(); };
           setInlineReady(true);
         } catch (error) {
+          for (const dispose of bridges.reverse()) dispose();
           console.warn('[dsh-better-answer-view] Inline renderer unavailable; keeping answer blocks at the end of the turn.', error);
         }
       }
@@ -152,7 +169,7 @@ function ToolReceipt({block, toolName, inspect}) {
 
 export const inject = ['slots', 'uiConversation', 'sessions', 'conversation'];
 export function apply(ctx) {
-  ctx.uiConversation.events.register(webAnswerDefinition);
+  registerWebAnswerConversation(ctx);
   registerInlineAssistant(ctx);
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
     name: 'conversation.chat.node', key: 'web-answer',

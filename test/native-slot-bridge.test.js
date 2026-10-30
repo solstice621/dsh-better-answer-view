@@ -72,3 +72,17 @@ test('native child replacement is mirrored and cleanup leaves the original untou
   assert.deepEqual(entries.get('native.reasoning'), [replacement]);
   assert.equal(listeners.get('native.reasoning').size, 0);
 });
+
+test('original and promoted reply renderers keep separate child-slot owners and dispose independently', () => {
+  const {ctx, base, entries, declared} = fixture();
+  const stopOriginal = registerNativeSlotBridge(ctx, base, native => native);
+  const stopPromoted = registerNativeSlotBridge(ctx, base, native => native, 'web-answer-reply');
+  assert.equal(entries.get('conversation.chat.node').length, 3);
+  assert.ok(declared.has('dsh-better-answer-view.native.native.reasoning'));
+  assert.ok(declared.has('dsh-better-answer-view.native.web-answer-reply.native.reasoning'));
+  stopPromoted();
+  assert.ok(declared.has('dsh-better-answer-view.native.native.reasoning'));
+  assert.equal(entries.get('conversation.chat.node').at(-1).options.key, 'assistant-step');
+  stopOriginal();
+  assert.deepEqual(entries.get('conversation.chat.node'), [base]);
+});
