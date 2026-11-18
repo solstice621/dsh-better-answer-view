@@ -2,11 +2,10 @@ import { inlineAnswerIds } from './inline-reference.js';
 
 function projectReply(event) {
   const content = event.data.message.content;
-  if (content.some(block => block.type === 'tool-call')
-    || !content.some(block => block.type === 'text' && inlineAnswerIds(block.text).length > 0)) return null;
-  // Only public response content is repeated in this presentation seat. The
-  // original assistant node still owns reasoning, timing and transcript data.
-  const blocks = content.filter(block => block.type !== 'reasoning').map(block => {
+  if (!content.some(block => block.type === 'text' && inlineAnswerIds(block.text).length > 0)) return null;
+  // Only public response content moves here. Reasoning and tool rows keep
+  // their native positions inside the process disclosure.
+  const blocks = content.filter(block => block.type !== 'reasoning' && block.type !== 'tool-call').map(block => {
     if (block.type === 'text') return { kind: 'text', text: block.text };
     if (block.type === 'image') return { kind: 'image', attachment: block.attachment };
     return { kind: 'other', block };

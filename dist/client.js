@@ -1111,8 +1111,8 @@ function inlineAnswerIds(text) {
 // src/reply-conversation.js
 function projectReply(event) {
   const content = event.data.message.content;
-  if (content.some((block) => block.type === "tool-call") || !content.some((block) => block.type === "text" && inlineAnswerIds(block.text).length > 0)) return null;
-  const blocks = content.filter((block) => block.type !== "reasoning").map((block) => {
+  if (!content.some((block) => block.type === "text" && inlineAnswerIds(block.text).length > 0)) return null;
+  const blocks = content.filter((block) => block.type !== "reasoning" && block.type !== "tool-call").map((block) => {
     if (block.type === "text") return { kind: "text", text: block.text };
     if (block.type === "image") return { kind: "image", attachment: block.attachment };
     return { kind: "other", block };
@@ -1262,18 +1262,22 @@ function projectedData(state) {
   const finalStep = finalBlocks.some((block) => block?.type === "text" && block.text.trim() !== "") && !finalBlocks.some((block) => block?.type === "tool-call") ? state.latestStep : null;
   const inlineStep = state.endSeq === void 0 ? void 0 : finalStep;
   const inlineOwners = /* @__PURE__ */ new Map();
-  const eligibleSteps = /* @__PURE__ */ new Set();
+  const settledTextSteps = /* @__PURE__ */ new Set();
   for (const [step, blocks] of [...state.assistantBlocks].sort(([a], [b]) => a - b)) {
-    const settledReply = state.settledSteps.has(step) && !blocks.some((block) => block?.type === "tool-call");
-    if (settledReply) eligibleSteps.add(step);
-    if (!settledReply && inlineStep !== void 0 && step !== inlineStep) continue;
+    const settled = state.settledSteps.has(step);
+    const calledTools = blocks.some((block) => block?.type === "tool-call");
+    if (settled && !calledTools) settledTextSteps.add(step);
+    if (!settled && inlineStep !== void 0 && step !== inlineStep) continue;
     for (const block of blocks) {
       if (block?.type !== "text") continue;
-      for (const id of inlineAnswerIds(block.text)) if (state.views.has(id)) inlineOwners.set(id, step);
+      for (const id of inlineAnswerIds(block.text)) {
+        if (!state.views.has(id)) continue;
+        if (settled && calledTools && settledTextSteps.has(inlineOwners.get(id))) continue;
+        inlineOwners.set(id, step);
+      }
     }
   }
-  const ownedSteps = new Set(inlineOwners.values());
-  const promotedSteps = [...eligibleSteps].filter((step) => ownedSteps.has(step));
+  const promotedSteps = [...new Set(inlineOwners.values())].filter((step) => state.settledSteps.has(step)).sort((a, b) => a - b);
   return {
     views: [...state.views.values()],
     inlineIds: [...inlineOwners.keys()],

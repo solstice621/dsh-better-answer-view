@@ -123,25 +123,31 @@ function updateAssistant(state, event) {
 function projectedData(state) {
   const finalBlocks = state.assistantBlocks.get(state.latestStep) ?? [];
   // Keep the native final-step boundary for unfinished/tool-calling messages.
-  // Settled visual replies have their own turn-level seat, so a later plain
-  // clarification cannot fold their prose or detach their inline cards.
+  // Settled replies can keep their public content at turn level even if the
+  // same step also called tools.
   const finalStep = finalBlocks.some(block => block?.type === 'text' && block.text.trim() !== '')
     && !finalBlocks.some(block => block?.type === 'tool-call') ? state.latestStep : null;
   const inlineStep = state.endSeq === undefined ? undefined : finalStep;
   const inlineOwners = new Map();
-  const eligibleSteps = new Set();
+  const settledTextSteps = new Set();
   for (const [step, blocks] of [...state.assistantBlocks].sort(([a], [b]) => a - b)) {
-    const settledReply = state.settledSteps.has(step)
-      && !blocks.some(block => block?.type === 'tool-call');
-    if (settledReply) eligibleSteps.add(step);
-    if (!settledReply && inlineStep !== undefined && step !== inlineStep) continue;
+    const settled = state.settledSteps.has(step);
+    const calledTools = blocks.some(block => block?.type === 'tool-call');
+    if (settled && !calledTools) settledTextSteps.add(step);
+    if (!settled && inlineStep !== undefined && step !== inlineStep) continue;
     for (const block of blocks) {
       if (block?.type !== 'text') continue;
-      for (const id of inlineAnswerIds(block.text)) if (state.views.has(id)) inlineOwners.set(id, step);
+      for (const id of inlineAnswerIds(block.text)) {
+        if (!state.views.has(id)) continue;
+        // A repeated reference in a tool step must not displace an already
+        // settled, tool-free reply that owns the card.
+        if (settled && calledTools && settledTextSteps.has(inlineOwners.get(id))) continue;
+        inlineOwners.set(id, step);
+      }
     }
   }
-  const ownedSteps = new Set(inlineOwners.values());
-  const promotedSteps = [...eligibleSteps].filter(step => ownedSteps.has(step));
+  const promotedSteps = [...new Set(inlineOwners.values())]
+    .filter(step => state.settledSteps.has(step)).sort((a, b) => a - b);
   return { views: [...state.views.values()], inlineIds: [...inlineOwners.keys()], inlineStep,
     inlineOwners: [...inlineOwners], promotedSteps };
 }

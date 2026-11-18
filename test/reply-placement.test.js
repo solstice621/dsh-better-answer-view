@@ -59,6 +59,18 @@ test('a tool-calling message cannot replace the earlier completed answer owner',
   assert.deepEqual(node.data.inlineOwners, [[A, 2], [B, 2]]);
 });
 
+test('settled steps can show the previous card while calling the tool for the next one', () => {
+  const mixed = reply(2, 2, `Before\n\n${marker(A)}\n\nBetween`, [{ type: 'tool-call', id: 'next-call' }]);
+  const final = reply(4, 3, `${marker(B)}\n\nAfter`);
+  const events = [exampleEvents[0], result(1, A), mixed, result(3, B), final, exampleEvents.at(-1)];
+  const node = project(events);
+  assert.deepEqual(node.data.inlineOwners, [[A, 2], [B, 3]]);
+  assert.deepEqual(node.data.promotedSteps, [2, 3]);
+  assert.deepEqual(node.data.views.filter(view => !node.data.inlineIds.includes(view.id)), []);
+  assert.deepEqual(project(events.slice(1)).data, node.data, 'reopened history keeps both original positions');
+  assert.deepEqual(project(events.slice(0, 3)).data.promotedSteps, [2], 'mixed reply stays inline during the next tool call');
+});
+
 test('a retry withdraws a promoted reply until its replacement has settled', () => {
   const events = [...exampleEvents.slice(0, 4), event('llm/retry', 4, { turn: 1, step: 2 }), exampleEvents.at(-1)];
   const node = project(events);
@@ -74,9 +86,10 @@ function replyNode(events) {
   return webAnswerReplyDefinition.buildViewNode({ id: '1:2', key: 'reply:1:2', matches, current: new Map() });
 }
 
-test('reply seats preserve public text, images and message identity, but do not copy reasoning or model metadata', () => {
+test('mixed reply seats preserve public text, images and message identity and exclude process content', () => {
   const source = reply(3, 2, `Before\n\n${marker(A)}\n\nAfter`, [
     { type: 'reasoning', text: 'Private reasoning' }, { type: 'image', attachment: { id: 'picture' } },
+    { type: 'tool-call', id: 'next-call', name: 'render_answer', arguments: 'Tool arguments' },
   ]);
   source.data.message.source = { replayState: 'not part of presentation' };
   const node = replyNode([source]);
@@ -86,9 +99,9 @@ test('reply seats preserve public text, images and message identity, but do not 
   assert.deepEqual(node.data.blocks, [{ kind: 'text', text: source.data.message.content[0].text },
     { kind: 'image', attachment: { id: 'picture' } }]);
   assert.ok(!JSON.stringify(node).includes('Private reasoning'));
+  assert.ok(!JSON.stringify(node).includes('Tool arguments'));
   assert.ok(!JSON.stringify(node).includes('replayState'));
   assert.equal(replyNode([reply(4, 2, 'No marker')]), null);
-  assert.equal(replyNode([reply(4, 2, marker(A), [{ type: 'tool-call' }])]), null);
 });
 
 test('retry and an unmarked replacement hide an already published reply without withdrawing its stable key', () => {
